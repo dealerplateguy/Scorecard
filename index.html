@@ -166,16 +166,13 @@ function fS(d){return new Date(d).toLocaleDateString("en-US",{month:"short",day:
 function trend(c,p){if(p==null)return"";const d=c-p;if(d===0)return'<span class="trend-flat">—</span>';if(d>0)return'<span class="trend-up">+'+d+' ▲</span>';return'<span class="trend-down">'+d+' ▼</span>';}
 function esc(s){return(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 
-let S={view:"score",store:"Honda",history:[],expanded:null,confirmDel:null,report:null,storeData:{}};
-const DK="scorecard-drafts-v2";
+let S={view:"score",store:null,storeConfirmed:false,scores:{},comments:{},photos:{},notes:"",history:[],expanded:null,confirmDel:null,report:null,histFilter:"All"};
+const DK="scorecard-draft-v3";
 
-// Store data is keyed by store name: S.storeData["Honda"] = {scores:{}, comments:{}, photos:{}, notes:""}
-function getSD(){if(!S.storeData[S.store])S.storeData[S.store]={scores:{},comments:{},photos:{},notes:""};return S.storeData[S.store];}
-
-function load(){try{const d=JSON.parse(localStorage.getItem(SK));if(d&&d.history)S.history=d.history;}catch(e){}try{const dr=JSON.parse(localStorage.getItem(DK));if(dr)S.storeData=dr;}catch(e){}}
+function load(){try{const d=JSON.parse(localStorage.getItem(SK));if(d&&d.history)S.history=d.history;}catch(e){}try{const dr=JSON.parse(localStorage.getItem(DK));if(dr){S.scores=dr.scores||{};S.comments=dr.comments||{};S.photos=dr.photos||{};S.notes=dr.notes||"";S.store=dr.store||null;S.storeConfirmed=!!dr.store;}}catch(e){}}
 function save(){localStorage.setItem(SK,JSON.stringify({history:S.history}));}
-function saveDrafts(){localStorage.setItem(DK,JSON.stringify(S.storeData));}
-function clearStoreDraft(){S.storeData[S.store]={scores:{},comments:{},photos:{},notes:""};saveDrafts();}
+function saveDraft(){localStorage.setItem(DK,JSON.stringify({scores:S.scores,comments:S.comments,photos:S.photos,notes:S.notes,store:S.store}));}
+function clearDraft(){S.scores={};S.comments={};S.photos={};S.notes="";S.store=null;S.storeConfirmed=false;localStorage.removeItem(DK);}
 function compress(file,cb){const r=new FileReader();r.onload=e=>{const img=new Image();img.onload=()=>{const c=document.createElement("canvas");let w=img.width,h=img.height;if(w>800){h=800/w*h;w=800;}c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);cb(c.toDataURL("image/jpeg",0.6));};img.src=e.target.result;};r.readAsDataURL(file);}
 function lastVisit(s){return S.history.find(h=>h.store===s);}
 function storeHist(s){return S.history.filter(h=>h.store===s);}
@@ -234,11 +231,27 @@ let h="";
 
 // ═══ SCORE VIEW ═══
 if(S.view==="score"){
-  const sd=getSD();
-  const lv=lastVisit(S.store),prevFlags=lv?lv.flaggedItems||[]:[],totalScore=Object.values(sd.scores).reduce((a,v)=>a+v,0),grade=getGrade(totalScore);
-  h+='<div class="store-pills">';
-  STORES.forEach(s=>{h+='<button class="store-pill '+(S.store===s?"active":"")+'" onclick="switchStore(\''+s.replace(/'/g,"\\'")+'\')">'+s+'</button>';});
+
+  // ── STORE PICKER (must pick before scoring) ──
+  if(!S.storeConfirmed){
+    h+='<div style="padding:30px 0;text-align:center">';
+    h+='<div style="font-size:20px;font-weight:700;margin-bottom:6px">Which store are you visiting?</div>';
+    h+='<p style="font-size:14px;color:#888;margin-bottom:24px">Select a store to begin your inspection</p>';
+    h+='<div style="display:flex;flex-direction:column;gap:10px;max-width:320px;margin:0 auto">';
+    STORES.forEach(s=>{
+      h+='<button onclick="pickStore(\''+s.replace(/'/g,"\\'")+'\')" style="padding:16px 20px;border-radius:12px;border:1px solid #ddd;background:#fff;font-size:16px;font-weight:500;color:#1a1a1a;text-align:left;min-height:52px;display:flex;align-items:center;justify-content:space-between">';
+      h+=s+'<span style="color:#ccc;font-size:14px">→</span></button>';
+    });
+    h+='</div></div>';
+  } else {
+
+  // ── LOCKED STORE HEADER ──
+  const lv=lastVisit(S.store),prevFlags=lv?lv.flaggedItems||[]:[],totalScore=Object.values(S.scores).reduce((a,v)=>a+v,0),grade=getGrade(totalScore);
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:1px solid #e8e8e8;border-radius:12px;padding:12px 16px;margin-bottom:14px">';
+  h+='<div style="font-size:18px;font-weight:700;color:#1B4965">📍 '+S.store+'</div>';
+  h+='<button onclick="changeStore()" style="padding:6px 14px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#888;font-size:12px;font-weight:500">Change</button>';
   h+='</div>';
+
   if(lv)h+='<div class="last-visit-bar">Last visit: '+fD(lv.date)+' — '+lv.total+'/'+lv.possible+' ('+Math.round(lv.total/lv.possible*100)+'%)</div>';
   if(prevFlags.length>0){
     h+='<div class="followup-box"><div style="font-weight:600;font-size:13px;color:#A32D2D;margin-bottom:8px">Follow-ups from last visit ('+fS(lv.date)+')</div>';
@@ -254,10 +267,10 @@ if(S.view==="score"){
   h+='<div class="legend"><span><span class="dot" style="background:#FCEBEB;border:1px solid #E24B4A"></span> 0 = failing</span><span><span class="dot" style="background:#FAEEDA;border:1px solid #EF9F27"></span> 1 = needs work</span><span><span class="dot" style="background:#D4EDDA;border:1px solid #5CB85C"></span> 2 = meets standard</span></div>';
 
   CATEGORIES.forEach((cat,ci)=>{
-    const pc=PC[ci],catTotal=cat.items.reduce((a,_,ii)=>a+(sd.scores[ci+'-'+ii]||0),0);
+    const pc=PC[ci],catTotal=cat.items.reduce((a,_,ii)=>a+(S.scores[ci+'-'+ii]||0),0);
     h+='<div class="cat-card"><div class="cat-header" style="background:'+pc.bg+'"><span class="name" style="color:'+pc.text+'">'+(ci+1)+'. '+cat.name+'</span><span class="tally" style="color:'+pc.text+'">'+catTotal+'/'+(cat.items.length*2)+'</span></div><div class="cat-body">';
     cat.items.forEach((item,ii)=>{
-      const key=ci+'-'+ii,val=sd.scores[key],nc=val!==undefined,pf=prevFlags.find(f=>f.key===key);
+      const key=ci+'-'+ii,val=S.scores[key],nc=val!==undefined,pf=prevFlags.find(f=>f.key===key);
       h+='<div class="item-wrap"><div class="item-row"><div class="item-text">'+esc(item);
       if(pf)h+=' <span class="badge '+(pf.score===0?'badge-fail':'badge-warn')+'">'+(pf.score===0?'FAILING':'NEEDS WORK')+'</span>';
       h+='</div><div class="score-dots">';
@@ -267,8 +280,8 @@ if(S.view==="score"){
       if(nc){
         const cClass=val===0?'comment-fail':val===1?'comment-warn':'comment-pass';
         const cPlaceholder=val===0?"What's failing? What needs to happen?":val===1?"What needs improvement?":"Notes (optional)";
-        h+='<input type="text" class="comment-input '+cClass+'" placeholder="'+cPlaceholder+'" value="'+esc(sd.comments[key]||'')+'" oninput="getSD().comments[\''+key+'\']=this.value;saveDrafts()"/>';
-        const ph=sd.photos[key]||[];
+        h+='<input type="text" class="comment-input '+cClass+'" placeholder="'+cPlaceholder+'" value="'+esc(S.comments[key]||'')+'" oninput="S.comments[\''+key+'\']=this.value;saveDraft()"/>';
+        const ph=S.photos[key]||[];
         h+='<div class="photo-strip">';
         ph.forEach((p,pi)=>{h+='<div class="photo-thumb-wrap"><img class="photo-thumb" src="'+p+'"/><button class="photo-remove" onclick="rmPhoto(\''+key+'\','+pi+')">×</button></div>';});
         if(ph.length<5)h+='<button class="add-photo-btn" onclick="addPhoto(\''+key+'\')"><span>📷</span><span>Add</span></button>';
@@ -280,9 +293,9 @@ if(S.view==="score"){
   });
 
   h+='<div style="margin-top:12px"><label style="font-size:14px;font-weight:500;color:#555;display:block;margin-bottom:6px">Overall visit notes</label>';
-  h+='<textarea class="notes-area" placeholder="Key observations, action items, follow-ups..." oninput="getSD().notes=this.value;saveDrafts()">'+esc(sd.notes)+'</textarea></div>';
+  h+='<textarea class="notes-area" placeholder="Key observations, action items, follow-ups..." oninput="S.notes=this.value;saveDraft()">'+esc(S.notes)+'</textarea></div>';
 
-  const fc=Object.values(sd.scores).filter(v=>v===0).length,wc=Object.values(sd.scores).filter(v=>v===1).length;
+  const fc=Object.values(S.scores).filter(v=>v===0).length,wc=Object.values(S.scores).filter(v=>v===1).length;
   h+='<div class="score-summary"><div><div style="font-weight:600;font-size:16px">'+S.store+' — visit score</div>';
   h+='<div style="font-size:13px;color:'+grade.color+';font-weight:500;margin-top:2px">'+grade.label;
   if(lv)h+=' '+trend(totalScore,lv.total);
@@ -290,6 +303,8 @@ if(S.view==="score"){
   if(fc+wc>0)h+='<div style="font-size:12px;color:#A32D2D;margin-top:4px">'+fc+' failing, '+wc+' needs work</div>';
   h+='</div><div class="score-num">'+totalScore+'/'+TOTAL_POSSIBLE+'</div></div>';
   h+='<button class="submit-btn '+(totalScore>0?'on':'off')+'" '+(totalScore>0?'onclick="submitVisit()"':'disabled')+'>Save visit score</button>';
+
+  } // end storeConfirmed
 }
 
 // ═══ HISTORY VIEW ═══
@@ -297,9 +312,9 @@ if(S.view==="history"){
   if(S.history.length===0){h+='<div class="empty"><p>No visits recorded yet</p><p>Score your first store visit to start tracking</p></div>';}
   else{
     h+='<div class="store-pills">';
-    ["All",...STORES].forEach(s=>{h+='<button class="store-pill '+(S.store===s?"active":"")+'" onclick="S.store=\''+s.replace(/'/g,"\\'")+'\';render()">'+s+'</button>';});
+    ["All",...STORES].forEach(s=>{h+='<button class="store-pill '+(S.histFilter===s?"active":"")+'" onclick="S.histFilter=\''+s.replace(/'/g,"\\'")+'\';render()">'+s+'</button>';});
     h+='</div>';
-    const list=S.store==="All"?S.history:S.history.filter(e=>e.store===S.store);
+    const list=S.histFilter==="All"?S.history:S.history.filter(e=>e.store===S.histFilter);
     list.forEach(entry=>{
       const g=getGrade(entry.total,entry.possible),sh=storeHist(entry.store),idx=sh.findIndex(e=>e.id===entry.id),prev=sh[idx+1],isExp=S.expanded===entry.id,flags=entry.flaggedItems||[],hasP=flags.some(f=>f.photos&&f.photos.length>0);
       h+='<div class="history-card"><div class="history-top" onclick="S.expanded='+(isExp?'null':entry.id)+';render()"><div>';
@@ -384,17 +399,17 @@ app.innerHTML=h;
 }
 
 // ═══ ACTIONS ═══
-function switchStore(s){S.store=s;render();}
-function doScore(ci,ii,v){const k=ci+'-'+ii,sd=getSD();if(sd.scores[k]===v){delete sd.scores[k];delete sd.comments[k];delete sd.photos[k];}else{sd.scores[k]=v;}saveDrafts();render();}
-function addPhoto(key){const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.capture='environment';inp.onchange=()=>{if(inp.files[0])compress(inp.files[0],url=>{const sd=getSD();if(!sd.photos[key])sd.photos[key]=[];if(sd.photos[key].length<5)sd.photos[key].push(url);saveDrafts();render();});};inp.click();}
-function rmPhoto(key,idx){const sd=getSD();if(sd.photos[key]){sd.photos[key].splice(idx,1);if(sd.photos[key].length===0)delete sd.photos[key];}saveDrafts();render();}
+function pickStore(s){S.store=s;S.storeConfirmed=true;saveDraft();render();}
+function changeStore(){S.storeConfirmed=false;render();}
+function doScore(ci,ii,v){const k=ci+'-'+ii;if(S.scores[k]===v){delete S.scores[k];delete S.comments[k];delete S.photos[k];}else{S.scores[k]=v;}saveDraft();render();}
+function addPhoto(key){const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.capture='environment';inp.onchange=()=>{if(inp.files[0])compress(inp.files[0],url=>{if(!S.photos[key])S.photos[key]=[];if(S.photos[key].length<5)S.photos[key].push(url);saveDraft();render();});};inp.click();}
+function rmPhoto(key,idx){if(S.photos[key]){S.photos[key].splice(idx,1);if(S.photos[key].length===0)delete S.photos[key];}saveDraft();render();}
 function submitVisit(){
-  const sd=getSD();
-  const ts=Object.values(sd.scores).reduce((a,v)=>a+v,0);
-  const cs=CATEGORIES.map((cat,ci)=>({name:cat.name,score:cat.items.reduce((a,_,ii)=>a+(sd.scores[ci+'-'+ii]||0),0),possible:cat.items.length*2}));
-  const fi=[];Object.entries(sd.scores).forEach(([k,v])=>{if(v<=1){const[ci,ii]=k.split('-').map(Number);fi.push({category:CATEGORIES[ci].name,item:CATEGORIES[ci].items[ii],score:v,comment:sd.comments[k]||'',key:k,photos:sd.photos[k]||[]});}});
-  S.history.unshift({id:Date.now(),store:S.store,date:new Date().toISOString(),total:ts,possible:TOTAL_POSSIBLE,catScores:cs,notes:sd.notes,details:{...sd.scores},comments:{...sd.comments},flaggedItems:fi});
-  save();clearStoreDraft();S.view='history';render();
+  const ts=Object.values(S.scores).reduce((a,v)=>a+v,0);
+  const cs=CATEGORIES.map((cat,ci)=>({name:cat.name,score:cat.items.reduce((a,_,ii)=>a+(S.scores[ci+'-'+ii]||0),0),possible:cat.items.length*2}));
+  const fi=[];Object.entries(S.scores).forEach(([k,v])=>{if(v<=1){const[ci,ii]=k.split('-').map(Number);fi.push({category:CATEGORIES[ci].name,item:CATEGORIES[ci].items[ii],score:v,comment:S.comments[k]||'',key:k,photos:S.photos[k]||[]});}});
+  S.history.unshift({id:Date.now(),store:S.store,date:new Date().toISOString(),total:ts,possible:TOTAL_POSSIBLE,catScores:cs,notes:S.notes,details:{...S.scores},comments:{...S.comments},flaggedItems:fi});
+  save();clearDraft();S.view='history';render();
 }
 function delEntry(id){S.history=S.history.filter(e=>e.id!==id);S.confirmDel=null;save();render();}
 
