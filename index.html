@@ -12,7 +12,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{height:100%;overflow-y:scroll;-webkit-overflow-scrolling:touch}
-body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f5f5f3;min-height:100%;padding-bottom:env(safe-area-inset-bottom,20px)}
+body{font-family:'DM Sans',sans-serif;color:#1a1a1a;background:#f5f5f3;min-height:100%;padding-bottom:max(80px,env(safe-area-inset-bottom,80px))}
 button{font-family:inherit;cursor:pointer;-webkit-appearance:none}
 input,textarea{font-family:inherit;-webkit-appearance:none;border-radius:0}
 
@@ -72,7 +72,7 @@ input,textarea{font-family:inherit;-webkit-appearance:none;border-radius:0}
 .score-summary{background:#fff;border-radius:14px;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;margin-top:14px;border:1px solid #e8e8e8}
 .score-num{font-family:'DM Mono',monospace;font-size:28px;font-weight:700}
 
-.submit-btn{width:100%;padding:16px 0;border-radius:12px;border:none;color:#fff;font-size:16px;font-weight:600;margin-top:10px;margin-bottom:20px;min-height:52px}
+.submit-btn{width:100%;padding:16px 0;border-radius:12px;border:none;color:#fff;font-size:16px;font-weight:600;margin-top:10px;margin-bottom:60px;min-height:52px}
 .submit-btn.on{background:#1B4965}
 .submit-btn.off{background:#ccc;cursor:default}
 .submit-btn:active.on{background:#15384F}
@@ -165,9 +165,13 @@ function fS(d){return new Date(d).toLocaleDateString("en-US",{month:"short",day:
 function trend(c,p){if(p==null)return"";const d=c-p;if(d===0)return'<span class="trend-flat">—</span>';if(d>0)return'<span class="trend-up">+'+d+' ▲</span>';return'<span class="trend-down">'+d+' ▼</span>';}
 function esc(s){return(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 
-let S={view:"score",store:"Honda",scores:{},comments:{},photos:{},history:[],notes:"",expanded:null,confirmDel:null,report:null};
-function load(){try{const d=JSON.parse(localStorage.getItem(SK));if(d&&d.history)S.history=d.history;}catch(e){}}
+let S={view:"score",store:"Honda",scores:{},comments:{},photos:{},history:[],notes:"",expanded:null,confirmDel:null,report:null,drafts:{}};
+const DK="scorecard-drafts-v1";
+function load(){try{const d=JSON.parse(localStorage.getItem(SK));if(d&&d.history)S.history=d.history;}catch(e){}try{const dr=JSON.parse(localStorage.getItem(DK));if(dr)S.drafts=dr;}catch(e){}}
 function save(){localStorage.setItem(SK,JSON.stringify({history:S.history}));}
+function saveDrafts(){localStorage.setItem(DK,JSON.stringify(S.drafts));}
+function loadDraft(){const d=S.drafts[S.store];if(d){S.scores=d.scores||{};S.comments=d.comments||{};S.photos=d.photos||{};S.notes=d.notes||"";}else{S.scores={};S.comments={};S.photos={};S.notes="";}}
+function saveDraft(){if(Object.keys(S.scores).length>0||S.notes){S.drafts[S.store]={scores:{...S.scores},comments:{...S.comments},photos:{...S.photos},notes:S.notes};}else{delete S.drafts[S.store];}saveDrafts();}
 function compress(file,cb){const r=new FileReader();r.onload=e=>{const img=new Image();img.onload=()=>{const c=document.createElement("canvas");let w=img.width,h=img.height;if(w>800){h=800/w*h;w=800;}c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);cb(c.toDataURL("image/jpeg",0.6));};img.src=e.target.result;};r.readAsDataURL(file);}
 function lastVisit(s){return S.history.find(h=>h.store===s);}
 function storeHist(s){return S.history.filter(h=>h.store===s);}
@@ -262,11 +266,11 @@ if(S.view==="score"){
       h+='</div></div>';
       if(pf&&pf.comment&&val===undefined)h+='<div style="font-size:12px;color:#999;font-style:italic;margin-top:4px;margin-left:4px">Last visit: '+esc(pf.comment)+'</div>';
       if(nc){
-        h+='<input type="text" class="comment-input '+(val===0?'comment-fail':'comment-warn')+'" placeholder="'+(val===0?"What's failing? What needs to happen?":"What needs improvement?")+'" value="'+esc(S.comments[key]||'')+'" oninput="S.comments[\''+key+'\']=this.value"/>';
+        h+='<input type="text" class="comment-input '+(val===0?'comment-fail':'comment-warn')+'" placeholder="'+(val===0?"What's failing? What needs to happen?":"What needs improvement?")+'" value="'+esc(S.comments[key]||'')+'" oninput="S.comments[\''+key+'\']=this.value;saveDraft()"/>';
         const ph=S.photos[key]||[];
         h+='<div class="photo-strip">';
         ph.forEach((p,pi)=>{h+='<div class="photo-thumb-wrap"><img class="photo-thumb" src="'+p+'"/><button class="photo-remove" onclick="rmPhoto(\''+key+'\','+pi+')">×</button></div>';});
-        if(ph.length<3)h+='<button class="add-photo-btn" onclick="addPhoto(\''+key+'\')"><span>📷</span><span>Add</span></button>';
+        if(ph.length<5)h+='<button class="add-photo-btn" onclick="addPhoto(\''+key+'\')"><span>📷</span><span>Add</span></button>';
         h+='</div>';
       }
       h+='</div>';
@@ -275,7 +279,7 @@ if(S.view==="score"){
   });
 
   h+='<div style="margin-top:12px"><label style="font-size:14px;font-weight:500;color:#555;display:block;margin-bottom:6px">Overall visit notes</label>';
-  h+='<textarea class="notes-area" placeholder="Key observations, action items, follow-ups..." oninput="S.notes=this.value">'+esc(S.notes)+'</textarea></div>';
+  h+='<textarea class="notes-area" placeholder="Key observations, action items, follow-ups..." oninput="S.notes=this.value;saveDraft()">'+esc(S.notes)+'</textarea></div>';
 
   const fc=Object.values(S.scores).filter(v=>v===0).length,wc=Object.values(S.scores).filter(v=>v===1).length;
   h+='<div class="score-summary"><div><div style="font-weight:600;font-size:16px">'+S.store+' — visit score</div>';
@@ -379,16 +383,16 @@ app.innerHTML=h;
 }
 
 // ═══ ACTIONS ═══
-function switchStore(s){S.store=s;S.scores={};S.comments={};S.photos={};S.notes='';render();}
-function doScore(ci,ii,v){const k=ci+'-'+ii;if(S.scores[k]===v){delete S.scores[k];delete S.comments[k];delete S.photos[k];}else{S.scores[k]=v;if(v===2){delete S.comments[k];delete S.photos[k];}}render();}
-function addPhoto(key){const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.capture='environment';inp.onchange=()=>{if(inp.files[0])compress(inp.files[0],url=>{if(!S.photos[key])S.photos[key]=[];if(S.photos[key].length<3)S.photos[key].push(url);render();});};inp.click();}
-function rmPhoto(key,idx){if(S.photos[key]){S.photos[key].splice(idx,1);if(S.photos[key].length===0)delete S.photos[key];}render();}
+function switchStore(s){saveDraft();S.store=s;loadDraft();render();}
+function doScore(ci,ii,v){const k=ci+'-'+ii;if(S.scores[k]===v){delete S.scores[k];delete S.comments[k];delete S.photos[k];}else{S.scores[k]=v;if(v===2){delete S.comments[k];delete S.photos[k];}}saveDraft();render();}
+function addPhoto(key){const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.capture='environment';inp.onchange=()=>{if(inp.files[0])compress(inp.files[0],url=>{if(!S.photos[key])S.photos[key]=[];if(S.photos[key].length<5)S.photos[key].push(url);saveDraft();render();});};inp.click();}
+function rmPhoto(key,idx){if(S.photos[key]){S.photos[key].splice(idx,1);if(S.photos[key].length===0)delete S.photos[key];}saveDraft();render();}
 function submitVisit(){
   const ts=Object.values(S.scores).reduce((a,v)=>a+v,0);
   const cs=CATEGORIES.map((cat,ci)=>({name:cat.name,score:cat.items.reduce((a,_,ii)=>a+(S.scores[ci+'-'+ii]||0),0),possible:cat.items.length*2}));
   const fi=[];Object.entries(S.scores).forEach(([k,v])=>{if(v<=1){const[ci,ii]=k.split('-').map(Number);fi.push({category:CATEGORIES[ci].name,item:CATEGORIES[ci].items[ii],score:v,comment:S.comments[k]||'',key:k,photos:S.photos[k]||[]});}});
   S.history.unshift({id:Date.now(),store:S.store,date:new Date().toISOString(),total:ts,possible:TOTAL_POSSIBLE,catScores:cs,notes:S.notes,details:{...S.scores},comments:{...S.comments},flaggedItems:fi});
-  save();S.scores={};S.comments={};S.photos={};S.notes='';S.view='history';render();
+  save();S.scores={};S.comments={};S.photos={};S.notes='';delete S.drafts[S.store];saveDrafts();S.view='history';render();
 }
 function delEntry(id){S.history=S.history.filter(e=>e.id!==id);S.confirmDel=null;save();render();}
 
@@ -536,7 +540,7 @@ async function downloadPDF(){
   }
 }
 
-load();render();
+load();loadDraft();render();
 </script>
 </body>
 </html>
