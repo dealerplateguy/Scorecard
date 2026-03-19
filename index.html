@@ -59,6 +59,7 @@ input,textarea{font-family:inherit;-webkit-appearance:none;border-radius:0}
 .comment-input{width:100%;padding:10px 12px;border-radius:10px;font-size:14px;margin-top:8px;box-sizing:border-box}
 .comment-fail{border:1px solid #E24B4A;background:#FFF8F8}
 .comment-warn{border:1px solid #EF9F27;background:#FFFCF5}
+.comment-pass{border:1px solid #5CB85C;background:#F5FFF7}
 
 .photo-strip{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .photo-thumb-wrap{position:relative;display:inline-block}
@@ -258,7 +259,7 @@ if(S.view==="score"){
     const pc=PC[ci],catTotal=cat.items.reduce((a,_,ii)=>a+(S.scores[ci+'-'+ii]||0),0);
     h+='<div class="cat-card"><div class="cat-header" style="background:'+pc.bg+'"><span class="name" style="color:'+pc.text+'">'+(ci+1)+'. '+cat.name+'</span><span class="tally" style="color:'+pc.text+'">'+catTotal+'/'+(cat.items.length*2)+'</span></div><div class="cat-body">';
     cat.items.forEach((item,ii)=>{
-      const key=ci+'-'+ii,val=S.scores[key],nc=val!==undefined&&val<=1,pf=prevFlags.find(f=>f.key===key);
+      const key=ci+'-'+ii,val=S.scores[key],nc=val!==undefined,pf=prevFlags.find(f=>f.key===key);
       h+='<div class="item-wrap"><div class="item-row"><div class="item-text">'+esc(item);
       if(pf)h+=' <span class="badge '+(pf.score===0?'badge-fail':'badge-warn')+'">'+(pf.score===0?'FAILING':'NEEDS WORK')+'</span>';
       h+='</div><div class="score-dots">';
@@ -266,7 +267,9 @@ if(S.view==="score"){
       h+='</div></div>';
       if(pf&&pf.comment&&val===undefined)h+='<div style="font-size:12px;color:#999;font-style:italic;margin-top:4px;margin-left:4px">Last visit: '+esc(pf.comment)+'</div>';
       if(nc){
-        h+='<input type="text" class="comment-input '+(val===0?'comment-fail':'comment-warn')+'" placeholder="'+(val===0?"What's failing? What needs to happen?":"What needs improvement?")+'" value="'+esc(S.comments[key]||'')+'" oninput="S.comments[\''+key+'\']=this.value;saveDraft()"/>';
+        const cClass=val===0?'comment-fail':val===1?'comment-warn':'comment-pass';
+        const cPlaceholder=val===0?"What's failing? What needs to happen?":val===1?"What needs improvement?":"Notes (optional)";
+        h+='<input type="text" class="comment-input '+cClass+'" placeholder="'+cPlaceholder+'" value="'+esc(S.comments[key]||'')+'" oninput="S.comments[\''+key+'\']=this.value;saveDraft()"/>';
         const ph=S.photos[key]||[];
         h+='<div class="photo-strip">';
         ph.forEach((p,pi)=>{h+='<div class="photo-thumb-wrap"><img class="photo-thumb" src="'+p+'"/><button class="photo-remove" onclick="rmPhoto(\''+key+'\','+pi+')">×</button></div>';});
@@ -384,7 +387,7 @@ app.innerHTML=h;
 
 // ═══ ACTIONS ═══
 function switchStore(s){saveDraft();S.store=s;loadDraft();render();}
-function doScore(ci,ii,v){const k=ci+'-'+ii;if(S.scores[k]===v){delete S.scores[k];delete S.comments[k];delete S.photos[k];}else{S.scores[k]=v;if(v===2){delete S.comments[k];delete S.photos[k];}}saveDraft();render();}
+function doScore(ci,ii,v){const k=ci+'-'+ii;if(S.scores[k]===v){delete S.scores[k];delete S.comments[k];delete S.photos[k];}else{S.scores[k]=v;}saveDraft();render();}
 function addPhoto(key){const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.capture='environment';inp.onchange=()=>{if(inp.files[0])compress(inp.files[0],url=>{if(!S.photos[key])S.photos[key]=[];if(S.photos[key].length<5)S.photos[key].push(url);saveDraft();render();});};inp.click();}
 function rmPhoto(key,idx){if(S.photos[key]){S.photos[key].splice(idx,1);if(S.photos[key].length===0)delete S.photos[key];}saveDraft();render();}
 function submitVisit(){
